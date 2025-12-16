@@ -1,0 +1,291 @@
+<html>
+    <head>
+        <title>PPG Sensor Monitor</title>
+        <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+        <script
+            src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+        <script src="{{ url_for('static', filename='main.js') }}"></script>
+        <style>
+            /* === 全局样式 === */
+            body { font-family: sans-serif; padding: 0 20px; } /* 给左右留点白 */
+            
+            /* === 控制面板 === */
+            .control-panel { margin: 15px 0; padding: 10px; background-color: #f5f5f5; border-radius: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+            button { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
+            input[type="number"] { padding: 6px; width: 80px; border: 1px solid #ccc; border-radius: 4px; }
+            
+            /* 按钮颜色 */
+            #startBtn { background-color: #4CAF50; color: white; }
+            #stopBtn { background-color: #f44336; color: white; display: none; }
+            
+            #saveBtn { background-color: #2196F3; color: white; display: inline-block; }
+            #saveBtn:disabled { background-color: #9E9E9E; cursor: not-allowed; }
+            
+            #estimateBtn:not(:disabled):not(.running) { background-color: #2196F3; color: white; }
+            #estimateBtn:not(:disabled).running { background-color: #FF9800; color: white; }
+            #estimateBtn:disabled { background-color: #9E9E9E; color: #FFFFFF; cursor: default; }
+
+            /* === 数值显示区 === */
+            .value-display {
+                display: flex;             /* 横向排列 */
+                justify-content: space-around; /* 均匀分布 */
+                align-items: center;       /* 垂直居中 */
+                background: #fff;
+                padding: 15px 0;
+                margin: 15px 0;
+                border: 1px solid #e0e0e0;
+                border-radius: 12px;       /* 圆角 */
+                box-shadow: 0 4px 10px rgba(0,0,0,0.05); /* 轻微阴影 */
+            }
+
+            .stat-card {
+                text-align: center;
+                flex: 1;                   /* 每个卡片平分宽度 */
+                padding: 0 10px;
+            }
+
+            .stat-header {
+                font-weight: bold;
+                font-size: 16px;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .stat-body {
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+                align-items: center;
+            }
+
+            .stat-row {
+                font-size: 14px;
+                color: #555;
+                display: flex;
+                align-items: baseline;
+                gap: 5px;
+            }
+
+            /* 核心数值 (HR, BP) 放大显示 */
+            .stat-value {
+                font-size: 24px;
+                font-weight: bold;
+                color: #333;
+                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            }
+
+            /* 次要数值 (Raw) 稍微小一点 */
+            .stat-value-small {
+                font-size: 16px;
+                color: #777;
+            }
+
+            /* 竖向分割线 */
+            .divider {
+                width: 1px;
+                height: 50px;
+                background-color: #eee;
+            }
+
+            /* 血压模块的特殊样式 */
+            .bp-card {
+                flex: 1.5; /* 血压内容多，稍微宽一点 */
+            }
+
+            .bp-row {
+                display: flex;
+                gap: 15px; /* SBP 和 DBP 之间的间距 */
+            }
+
+            .status-subtext {
+                font-size: 12px;
+                color: #999;
+                margin-top: 5px;
+            }
+
+            /* 响应式：手机上变成竖着排 */
+            @media (max-width: 768px) {
+                .value-display { flex-direction: column; gap: 20px; }
+                .divider { width: 80%; height: 1px; } /* 竖线变横线 */
+            }
+            .sensor-label { font-weight: bold; margin-right: 10px; margin-left: 20px; }
+            .sensor-label:first-child { margin-left: 0; }
+            .timer { color: #666; margin-left: auto; font-size: 14px; } /* 倒计时靠右 */
+
+            /* === 图表布局核心样式 (紧凑版) === */
+            .charts-main-wrapper {
+                display: flex;
+                flex-direction: row;
+                gap: 20px;           /* 左右列间距 */
+                width: 100%;
+                margin-top: 15px;
+                /* 【修改】去掉固定高度，改成自动，防止内容被截断 */
+                height: auto;        
+                min-height: 500px;
+            }
+
+            .charts-column-left, .charts-column-right {
+                display: flex;
+                flex-direction: column;
+                /* 【核心修改】大幅增加垂直间距！解决重合问题的关键 */
+                /* 之前是 15px，现在改成 50px，给上面的 X 轴留足面子 */
+                gap: 50px;           
+            }
+
+            /* 左列右列比例 */
+            .charts-column-left { flex: 6; }
+            .charts-column-right { flex: 4; }
+
+            .chart-card {
+                background: #fff;
+                border: 1px solid #eee;
+                border-radius: 8px;
+                padding: 10px 5px 0 5px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+                width: 100%;
+                
+                /* 【保持高度小巧】 */
+                height: 220px;       
+                
+                box-sizing: border-box;
+                position: relative;
+                overflow: visible; /* 【修改】允许内容轻微溢出（可选） */
+            }
+
+            .chart-card h3 {
+                margin: 0 0 5px 0;
+                font-size: 13px;
+                color: #666;
+                text-align: center;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            
+            /* 响应式：屏幕太窄时变单列 */
+            @media (max-width: 1000px) {
+                .charts-main-wrapper { flex-direction: column; height: auto; }
+                .charts-column-left, .charts-column-right { width: 100%; flex: none; }
+            }
+        </style>
+    </head>
+    <body>
+        <h2>❤️ PPG Sensor Monitor</h2>
+
+        <div class="control-panel">
+            <button id="startBtn">Start Monitoring</button>
+            <button id="stopBtn">Stop Monitoring</button>
+            <button id="estimateBtn" disabled>Start Analysis</button>
+            <button id="saveBtn" disabled>Save Data (CSV)</button>
+            <span style="margin-left:15px;">True SBP：</span>
+            <input type="number" id="sbpInput" placeholder="systolic BP"
+                value="0" min="0" style="padding:8px; width:120px;">
+            <span style="margin-left:10px;">True DBP：</span>
+            <input type="number" id="dbpInput" placeholder="diastolic BP"
+                value="0" min="0" style="padding:8px; width:120px;">
+            <span id="status">Status: Not Started</span>
+            <span class="timer" id="autoStopTimer">Countdown--:--</span>
+        </div>
+
+        <!-- === 数值显示区 (美化版) === -->
+        <div class="value-display">
+            
+            <!-- 模块 1: 心率 (Heart Rate) -->
+            <div class="stat-card">
+                <div class="stat-header" style="color:rgb(255, 99, 132);">
+                    Heart Rate
+                </div>
+                <div class="stat-main-value">
+                    <!-- 【复用 ID】直接用 s0-bpm 显示大心率 -->
+                    <span id="s0-bpm">0</span>
+                    <span class="stat-unit">BPM</span>
+                    
+                    <!-- 【防报错黑科技】隐藏的 s1-bpm -->
+                    <!-- 这样你的 JS 继续更新它也不会报错，界面上又看不见 -->
+                    <span id="s1-bpm" style="display: none;">0</span>
+                </div>
+            </div>
+
+            <!-- 分割线 -->
+            <div class="divider"></div>
+
+            <!-- 模块 2: 血压 (Blood Pressure) -->
+            <div class="stat-card bp-card">
+                <div class="stat-header" style="color:rgb(75, 192, 192);">
+                    Blood Pressure
+                </div>
+                <div class="stat-main-value">
+                    <!-- 【复用 ID】保持原样 -->
+                    <span id="est-sbp">--</span>
+                    <span class="stat-unit">/</span>
+                    <span id="est-dbp">--</span>
+                    <span class="stat-unit">mmHg</span>
+                </div>
+                <!-- 状态文字 -->
+                <div id="est-status" class="status-subtext">
+                    Ready to analyze
+                </div>
+            </div>
+
+            <!-- 分割线 -->
+            <div class="divider"></div>
+
+            <!-- 模块 3: 信号状态 (Raw Values) -->
+            <div class="stat-card">
+                <div class="stat-header" style="color:#888;">
+                    Raw Signal
+                </div>
+                <div class="stat-body">
+                    <div class="stat-row">
+                        <span style="color:rgb(54, 162, 235); font-weight:bold;">S0 Raw:</span>
+                        <!-- 【复用 ID】保持原样 -->
+                        <span id="s0-raw" class="stat-value-small">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span style="color:rgb(255, 99, 132); font-weight:bold;">S1 Raw:</span>
+                        <!-- 【复用 ID】保持原样 -->
+                        <span id="s1-raw" class="stat-value-small">0</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 新的图表布局结构 -->
+        <div class="charts-main-wrapper">
+            
+            <!-- === 左列：原始波形 + 处理后波形 === -->
+            <div class="charts-column-left">
+                <!-- 1. Raw Data Chart -->
+                <div class="chart-card">
+                    <h3>Raw Data Chart</h3>
+                    <!-- canvas 加上 style 确保占满容器 -->
+                    <canvas id="raw-chart" style="width:100%; height:100%;"></canvas>
+                </div>
+
+                <!-- 2. Preprocessed Data Chart -->
+                <div class="chart-card">
+                    <h3>Preprocessed Data Chart</h3>
+                    <canvas id="processed-chart" style="width:100%; height:100%;"></canvas>
+                </div>
+            </div>
+
+            <!-- === 右列：心率 + 血压 === -->
+            <div class="charts-column-right">
+                <!-- 3. HR Chart -->
+                <div class="chart-card">
+                    <h3>Heart Rate Chart</h3>
+                    <canvas id="bpm-chart" style="width:100%; height:100%;"></canvas>
+                </div>
+
+                <!-- 4. BP Chart -->
+                <div class="chart-card">
+                    <h3>Real-Time BP Chart</h3>
+                    <canvas id="bp-chart" style="width:100%; height:100%;"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </body>
+</html>
