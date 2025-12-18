@@ -59,7 +59,8 @@ def handle_control(data):
 def receive_raw_data():
     global is_pushing
     if not is_pushing:
-        return "OK"
+        # 即使不推送，也可以返回当前状态
+        return json.dumps({"status": "paused", "sbp": 0, "dbp": 0, "hr": 0})
 
     s0_raw_list = [int(val) for val in request.form.getlist("s0_raw") if val.strip()]
     s1_raw_list = [int(val) for val in request.form.getlist("s1_raw") if val.strip()]
@@ -70,16 +71,24 @@ def receive_raw_data():
     cleaned_s0 = [clean_raw(val) for val in s0_raw_list]
     cleaned_s1 = [clean_raw(val) for val in s1_raw_list]
 
-    # 【修改点】: 在推送波形的同时，推送全局变量中存储的最新的 BPM 和 BP
+    # 推送给网页
     socketio.emit(
         "update",
         {
             "raw": {"s0_raw": cleaned_s0, "s1_raw": cleaned_s1},
-            "bpm": latest_bpm,  # 包含 s0, s1 的心率
-            "bp": latest_bp,  # 包含 sbp, dbp 的血压
+            "bpm": latest_bpm,
+            "bp": latest_bp,
         },
     )
-    return "OK"
+    
+    # 【核心修改】将最新的 BPM 和 BP 返回给 ESP32
+    # 注意：latest_bpm['s0'] 和 latest_bp['sbp'] 是由 /estimate_all 接口计算更新的
+    return json.dumps({
+        "status": "OK",
+        "sbp": int(latest_bp['sbp']),
+        "dbp": int(latest_bp['dbp']),
+        "hr": int(latest_bpm['s0'])
+    })
 
 
 # ---------------------- 核心修改 2: 新增统一计算接口 ----------------------
