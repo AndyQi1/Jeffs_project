@@ -2,20 +2,21 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from training_on_clean_data import *
+from model_config import *
 from matplotlib import pyplot as plt
 plt.rcParams['font.family'] = 'Times New Roman'
 
 def load_model_and_predict(model_path, test_data):
     """加载模型并进行预测"""
+    logging.info("Loading model and performing predictions...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    logging.info(f"Using device: {device}")
     
     # 加载模型
     model = ResNetPPG().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
-    print(f"Model loaded from {model_path}")
+    logging.info(f"Model loaded from {model_path}")
     
     # 创建数据集和加载器
     dataset = BPDataset(test_data, is_train=False)
@@ -171,11 +172,11 @@ def plot_error_distribution(predictions, targets):
     plt.tight_layout()
     
 
-def main():
+def test_model():
     """主函数"""
     # 1. 加载测试数据
-    print("load test data...")
-    all_samples = np.load('clean_ppg_dataset.npy', allow_pickle=True)
+    logging.info("load test data...")
+    all_samples = np.load('DL_data/clean_ppg_dataset.npy', allow_pickle=True)
     
     # 使用验证集作为测试数据（与训练时相同的划分逻辑）
     subject_ids = list(set([str(sample['subject_id']) for sample in all_samples]))
@@ -187,10 +188,10 @@ def main():
     val_ids = subject_ids[:]
     test_data = [s for s in all_samples if str(s['subject_id']) in val_ids]
     
-    print(f"number of test samples: {len(test_data)}")
+    logging.info(f"number of test samples: {len(test_data)}")
     
     # 2. 加载模型并进行预测
-    model_path = "bp_model_best.pth"
+    model_path = "model_para/bp_model_best.pth"
     
     predictions, targets = load_model_and_predict(model_path, test_data)
     
@@ -198,41 +199,33 @@ def main():
     metrics = calculate_metrics(predictions, targets)
     
     # 4. 打印指标结果
-    print("\n=== model performance evaluation results ===")
-    print("\n--- SBP metrics ---")
-    print(f"SBP_MAE: {metrics['SBP_MAE']:.2f} mmHg")
-    print(f"SBP_ME: {metrics['SBP_ME']:.2f} mmHg")
-    print(f"SBP_STD: {metrics['SBP_STD']:.2f} mmHg")
-    print(f"SBP_RMSE: {metrics['SBP_RMSE']:.2f} mmHg")
-    print(f"SBP_R²: {metrics['SBP_R2']:.4f}")
-    print(f"SBP ≤5mmHg: {metrics['SBP_Within_5mmHg']:.1f}%")
-    print(f"SBP ≤10mmHg: {metrics['SBP_Within_10mmHg']:.1f}%")
-    print(f"SBP ≤15mmHg: {metrics['SBP_Within_15mmHg']:.1f}%")
+    logging.info("\n=== model performance evaluation results ===")
+    logging.info("\n--- SBP metrics ---")
+    logging.info(f"SBP_MAE: {metrics['SBP_MAE']:.2f} mmHg")
+    logging.info(f"SBP_ME: {metrics['SBP_ME']:.2f} mmHg")
+    logging.info(f"SBP_STD: {metrics['SBP_STD']:.2f} mmHg")
+    logging.info(f"SBP_RMSE: {metrics['SBP_RMSE']:.2f} mmHg")
+    logging.info(f"SBP_R²: {metrics['SBP_R2']:.4f}")
+    logging.info(f"SBP ≤5mmHg: {metrics['SBP_Within_5mmHg']:.1f}%")
+    logging.info(f"SBP ≤10mmHg: {metrics['SBP_Within_10mmHg']:.1f}%")
+    logging.info(f"SBP ≤15mmHg: {metrics['SBP_Within_15mmHg']:.1f}%")
     
-    print("\n--- DBP metrics ---")
-    print(f"DBP_MAE: {metrics['DBP_MAE']:.2f} mmHg")
-    print(f"DBP_ME: {metrics['DBP_ME']:.2f} mmHg")
-    print(f"DBP_STD: {metrics['DBP_STD']:.2f} mmHg")
-    print(f"DBP_RMSE: {metrics['DBP_RMSE']:.2f} mmHg")
-    print(f"DBP_R²: {metrics['DBP_R2']:.4f}")
-    print(f"DBP ≤5mmHg: {metrics['DBP_Within_5mmHg']:.1f}%")
-    print(f"DBP ≤10mmHg: {metrics['DBP_Within_10mmHg']:.1f}%")
-    print(f"DBP ≤15mmHg: {metrics['DBP_Within_15mmHg']:.1f}%")
+    logging.info("\n--- DBP metrics ---")
+    logging.info(f"DBP_MAE: {metrics['DBP_MAE']:.2f} mmHg")
+    logging.info(f"DBP_ME: {metrics['DBP_ME']:.2f} mmHg")
+    logging.info(f"DBP_STD: {metrics['DBP_STD']:.2f} mmHg")
+    logging.info(f"DBP_RMSE: {metrics['DBP_RMSE']:.2f} mmHg")
+    logging.info(f"DBP_R²: {metrics['DBP_R2']:.4f}")
+    logging.info(f"DBP ≤5mmHg: {metrics['DBP_Within_5mmHg']:.1f}%")
+    logging.info(f"DBP ≤10mmHg: {metrics['DBP_Within_10mmHg']:.1f}%")
+    logging.info(f"DBP ≤15mmHg: {metrics['DBP_Within_15mmHg']:.1f}%")
     
-    print("\n--- Overall metrics ---")
-    print(f"Overall_MAE: {metrics['Overall_MAE']:.2f} mmHg")
-    print(f"Overall_ME: {metrics['Overall_ME']:.2f} mmHg")
-    print(f"Overall_STD: {metrics['Overall_STD']:.2f} mmHg")
-    print(f"Overall_RMSE: {metrics['Overall_RMSE']:.2f} mmHg")
-    print(f"Overall ≤5mmHg: {metrics['Overall_Within_5mmHg']:.1f}%")
-    print(f"Overall ≤10mmHg: {metrics['Overall_Within_10mmHg']:.1f}%")
-    print(f"Overall ≤15mmHg: {metrics['Overall_Within_15mmHg']:.1f}%")
     # 5. 绘制图表
     plot_scatter_results(predictions, targets)
     plot_error_distribution(predictions, targets)
     plt.show()
     
-    print("model performance evaluation completed!")
+    logging.info("model performance evaluation completed!")
 
 if __name__ == "__main__":
-    main()
+    test_model()

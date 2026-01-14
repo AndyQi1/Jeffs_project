@@ -12,7 +12,7 @@ import os
 
 
 # 读取npy文件
-dataset = np.load('raw_ppg_dataset.npy', allow_pickle=True)
+dataset = np.load('DL_data/raw_ppg_dataset.npy', allow_pickle=True)
 
 # 查看数据结构
 print(f"数据类型: {type(dataset)}")
@@ -24,47 +24,37 @@ segmented_ppg = []
 for sample in dataset:
     ppg_distal = sample['ppg_distal']
     ppg_proximal = sample['ppg_proximal']
-    seconds = np.arange(0, len(ppg_distal)/500, 1/500)
+
     fs = 500  # 计算采样率
-    window_size = fs*15  # 15秒窗口
-    overlap_size = 5*fs  # 5秒重叠
-    step_size = window_size - overlap_size
+    
+    segment_length = 10  # 10秒窗口
 
     # signal processing ==========================================================================================
-
-    # remove linear trend - detrend
-    ppg_distal_detrended = remove_linear_trend(ppg_distal)
-    ppg_proximal_detrended = remove_linear_trend(ppg_proximal)
-
-    # bandpass filter - remove noise
-    ppg_distal_filtered = butter_bandpass_filter(ppg_distal_detrended, 0.4, 8, fs)
-    ppg_proximal_filtered = butter_bandpass_filter(ppg_proximal_detrended, 0.4, 8, fs)
-
-    # Hampel filter - remove outliers
-    ppg_distal_filtered, _ = hampel_filter(ppg_distal_filtered)
-    ppg_proximal_filtered, _ = hampel_filter(ppg_proximal_filtered)
-
-    # Z-score normalization
-    ppg_distal_norm = (ppg_distal_filtered - np.mean(ppg_distal_filtered)) / np.std(ppg_distal_filtered)
-    ppg_proximal_norm = (ppg_proximal_filtered - np.mean(ppg_proximal_filtered)) / np.std(ppg_proximal_filtered)
+    PTT_list, HR_list, PWV_list, SVRI_list, IPA_list, skew_list, \
+        similarity_list, perfusion_index_list, ppg_distal_waveforms, ppg_proximal_waveforms = extract_ppg_features(
+        ppg_distal, ppg_proximal, segment_length, fs=fs)
 
     # sliding window ============================================================================================
     segmented_data_list = []
-    for start in range(0, len(ppg_distal_norm) - window_size + 1, step_size):
-        end = start + window_size
-        ppg_distal_window = ppg_distal_norm[start:end]
-        ppg_proximal_window = ppg_proximal_norm[start:end]
 
-        segmented_data = sample.copy()
-        segmented_data['ppg_distal'] = ppg_distal_window
-        segmented_data['ppg_proximal'] = ppg_proximal_window
+    segmented_data = sample.copy()
+    segmented_data['ppg_distal_waveforms'] = ppg_distal_waveforms
+    segmented_data['ppg_proximal_waveforms'] = ppg_proximal_waveforms
+    segmented_data['PTT_list'] = PTT_list
+    segmented_data['HR_list'] = HR_list
+    segmented_data['PWV_list'] = PWV_list
+    segmented_data['SVRI_list'] = SVRI_list
+    segmented_data['IPA_list'] = IPA_list
+    segmented_data['skew_list'] = skew_list
+    segmented_data['similarity_list'] = similarity_list
+    segmented_data['perfusion_index_list'] = perfusion_index_list
 
-        segmented_data_list.append(segmented_data)
+    segmented_data_list.append(segmented_data)
     print(f"样本 {sample['subject_id']}的活动类型{sample['activity']}分割完成，共 {len(segmented_data_list)} 个窗口")
 
     segmented_ppg.extend(segmented_data_list)
 
-np.save('clean_ppg_dataset.npy', np.array(segmented_ppg))
+np.save('DL_data/clean_ppg_dataset.npy', np.array(segmented_ppg))
 print(f"分段完成，共 {len(segmented_ppg)} 个窗口")
 
     

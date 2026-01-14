@@ -12,7 +12,7 @@ import json
 import numpy as np  # 需要导入numpy处理数据
 
 # 确保 function_lib 中有这两个函数
-from function_lib import PPG_feature_extraction, BP_calculation
+from function_lib import *
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -117,8 +117,9 @@ def estimate_all():
         # 4. 调用算法 (同时算出 BPM 和 特征值)
         # 假设 PPG_feature_extraction 返回: (PTT, HR, PWV)
         try:
-            PTT, HR, PWV, s0_proc, s1_proc = PPG_feature_extraction(
-                seconds_np, s0_raw_np, s1_raw_np
+            fs = int(seconds_np.shape[0] / (seconds_np[-1] - seconds_np[0]))  # 计算采样率
+            PTT_list, HR_list, PWV_list, _, _, _, _, _, ppg0_waveforms, ppg1_waveforms = extract_ppg_features(
+                s0_raw_np, s1_raw_np, segment_length=3, fs=fs
             )
         except Exception as e:
             print(f"Algorithm Error: {e}")
@@ -129,6 +130,11 @@ def estimate_all():
         # 5. 计算血压
         # 假设 BP_calculation 使用上面算出的特征
         try:
+            PTT = np.mean(PTT_list)
+            HR = np.mean(HR_list)
+            PWV = np.mean(PWV_list)
+            s0_proc = ppg0_waveforms[0]["ppg_signal"]
+            s1_proc = ppg1_waveforms[0]["ppg_signal"]
             estimated_sbp, estimated_dbp = BP_calculation(PTT, HR, PWV)
         except Exception as e:
             print(f"BP Algo Error: {e}")

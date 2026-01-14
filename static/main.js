@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let isEstimating = false;    // 【修改】改名：是否处于分析模式
     let estimateInterval = null; // 【修改】改名：分析定时器
-    const UPDATE_INTERVAL = 1000; // 【修改】改为2秒刷新一次，频率更高
+    const UPDATE_INTERVAL = 3000; // 【修改】改为2秒刷新一次，频率更高
 
 
     let globalLastTimestamp = null;  // 全局最后一个点的时间戳（确保递增）

@@ -1,3 +1,5 @@
+# analysis the subject info in PTT data
+
 import pandas as pd
 import glob
 import os

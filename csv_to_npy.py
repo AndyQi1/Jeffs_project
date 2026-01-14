@@ -90,7 +90,7 @@ for file_path in csv_files:
     dataset.append(data_dict)
 
 
-np.save('raw_ppg_dataset.npy', dataset)
+np.save('DL_data/raw_ppg_dataset.npy', dataset)
 
 print(f"成功打包 {len(dataset)} 个样本。")
 
